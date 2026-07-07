@@ -8,6 +8,10 @@ const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) GovPilotConnector/1.0.0 Safari/537.36';
 
 export class CadPrevClient {
+  public buildExtratoUrl(cnpj: string): string {
+    return buildExtratoUrl(normalizeCnpj(cnpj));
+  }
+
   public async consultarExtratoPorCnpj(cnpj: string): Promise<CadPrevExtrato> {
     const normalizedCnpj = normalizeCnpj(cnpj);
     const browserEngine = BrowserFactory.create({
@@ -25,7 +29,7 @@ export class CadPrevClient {
       });
       const navigation = new NavigationService(page);
 
-      await navigation.open(buildExtratoUrl(normalizedCnpj), {
+      await navigation.open(this.buildExtratoUrl(normalizedCnpj), {
         waitUntil: 'domcontentloaded',
         timeoutMs: DEFAULT_TIMEOUT_MS,
       });

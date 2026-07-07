@@ -10,3 +10,9 @@ export interface CadPrevExtrato {
   cnpj: string;
   crp: CadPrevCrp;
 }
+
+export interface CadPrevCrpResponse extends CadPrevExtrato {
+  fonte: 'CadPrev Público';
+  url_consultada: string;
+  consultado_em: string;
+}
