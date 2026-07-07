@@ -9,16 +9,25 @@ const crpResponseCache = new MemoryCache<CadPrevCrpResponse>();
 
 cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
   const cnpj = getSingleQueryParam(req.query.cnpj);
+  const ente = getSingleQueryParam(req.query.ente);
 
-  if (!cnpj) {
+  if (!cnpj && !ente) {
     res.status(400).json({
-      error: 'cnpj is required',
+      error: 'cnpj or ente is required',
     });
     return;
   }
 
-  const normalizedCnpj = normalizeCnpj(cnpj);
-  const cacheKey = buildCrpCacheKey(normalizedCnpj);
+  const query = cnpj
+    ? {
+        type: 'cnpj' as const,
+        value: normalizeCnpj(cnpj),
+      }
+    : {
+        type: 'ente' as const,
+        value: normalizeEnte(ente ?? ''),
+      };
+  const cacheKey = buildCrpCacheKey(query.type, query.value);
   const cachedResponse = crpResponseCache.get(cacheKey);
 
   if (cachedResponse) {
@@ -35,10 +44,16 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
   const cadPrevClient = new CadPrevClient();
 
   try {
-    const extrato = await cadPrevClient.consultarExtratoPorCnpj(normalizedCnpj);
+    const extrato =
+      query.type === 'cnpj'
+        ? await cadPrevClient.consultarExtratoPorCnpj(query.value)
+        : await cadPrevClient.consultarExtratoPorEnte(query.value);
     const response: CadPrevCrpResponse = {
       fonte: 'CadPrev Público',
-      url_consultada: cadPrevClient.buildExtratoUrl(normalizedCnpj),
+      url_consultada:
+        query.type === 'cnpj'
+          ? cadPrevClient.buildExtratoUrl(query.value)
+          : cadPrevClient.buildEnteSearchUrl(),
       ente: extrato.ente,
       uf: extrato.uf,
       cnpj: extrato.cnpj,
@@ -83,8 +98,12 @@ function normalizeCnpj(cnpj: string): string {
   return cnpj.replace(/\D/g, '');
 }
 
-function buildCrpCacheKey(cnpj: string): string {
-  return `cadprev:crp:cnpj:${cnpj}`;
+function normalizeEnte(ente: string): string {
+  return ente.trim();
+}
+
+function buildCrpCacheKey(type: 'cnpj' | 'ente', value: string): string {
+  return `cadprev:crp:${type}:${value.toLowerCase()}`;
 }
 
 function createCadPrevTimeoutResponse(error: unknown): CadPrevErrorResponse {

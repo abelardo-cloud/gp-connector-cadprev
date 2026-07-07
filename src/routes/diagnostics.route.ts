@@ -1,5 +1,6 @@
 import { BrowserFactory, NavigationService } from '@govpilot/sdk';
 import { Router, type IRouter } from 'express';
+import { CadPrevClient } from '../cadprev/CadPrevClient.js';
 import { env } from '../config/env.js';
 
 const CADPREV_DIAGNOSTIC_URL =
@@ -119,6 +120,12 @@ diagnosticsRouter.get('/diagnostics/browser/cadprev', async (_req, res) => {
   } finally {
     await browserEngine.close();
   }
+});
+
+diagnosticsRouter.get('/diagnostics/browser/cadprev-ente', async (_req, res) => {
+  const cadPrevClient = new CadPrevClient();
+
+  res.json(await cadPrevClient.diagnosticarBuscaPorEnte('Santa Catarina'));
 });
 
 function createPageOptions() {

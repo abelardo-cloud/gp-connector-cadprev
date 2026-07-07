@@ -1,6 +1,6 @@
 # gp-connector-cadprev
 
-GovPilot backend connector for **CadPrev**. This repository provides the initial project foundation for subsequent implementation tasks.
+GovPilot backend connector for **CadPrev**. This service exposes CRP consultation endpoints backed by the public CadPrev website and the GovPilot SDK browser engine.
 
 ## Stack
 
@@ -18,6 +18,8 @@ gp-connector-cadprev/
 ├── docs/             # Project documentation
 ├── src/              # Application source code
 │   ├── api/          # Express server setup
+│   ├── cache/        # In-memory cache utilities
+│   ├── cadprev/      # CadPrev client, parser, and types
 │   ├── config/       # Environment configuration
 │   └── routes/       # HTTP routes
 ├── tests/            # Automated tests
@@ -118,6 +120,27 @@ After deploy, validate:
 ```bash
 curl https://<railway-domain>/health
 curl "https://<railway-domain>/api/v1/cadprev/crp?cnpj=82951229000176"
+curl "https://<railway-domain>/api/v1/cadprev/crp?ente=Santa%20Catarina"
+```
+
+## CadPrev CRP API
+
+The official v1 endpoint supports both direct CNPJ consultation and entity-name consultation:
+
+```bash
+GET /api/v1/cadprev/crp?cnpj=82951229000176
+GET /api/v1/cadprev/crp?ente=Santa%20Catarina
+```
+
+The `ente` flow searches CadPrev by federative entity, opens the latest CRP entry, resolves the CNPJ, and then loads the extrato page so the same parser and final JSON contract are used.
+
+Temporary diagnostic endpoints:
+
+```bash
+GET /diagnostics/http/cadprev
+GET /diagnostics/browser/example
+GET /diagnostics/browser/cadprev
+GET /diagnostics/browser/cadprev-ente
 ```
 
 ## Temporary Browser Check
@@ -133,15 +156,6 @@ The endpoint uses `@govpilot/sdk` to start Chromium, open `https://example.com`,
 ```json
 {"browser":"ok"}
 ```
-
-## Scope
-
-This repository currently contains **foundation only**. The following are planned for future tasks:
-
-- CadPrev scraping pipeline
-- Browser Manager
-- Parser
-- Cache
 
 ## License
 
