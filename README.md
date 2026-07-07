@@ -7,6 +7,7 @@ GovPilot backend connector for **CadPrev**. This repository provides the initial
 - **Runtime:** Node.js 22 LTS
 - **Language:** TypeScript
 - **Package manager:** pnpm
+- **Browser automation:** Playwright + Chromium
 
 ## Project structure
 
@@ -15,6 +16,11 @@ gp-connector-cadprev/
 ├── .github/          # CI workflows
 ├── docs/             # Project documentation
 ├── src/              # Application source code
+│   ├── api/          # Express server setup
+│   ├── browser/      # Browser Engine foundation
+│   ├── config/       # Environment configuration
+│   ├── routes/       # HTTP routes
+│   └── types/        # Shared TypeScript interfaces
 ├── tests/            # Automated tests
 ├── Dockerfile
 ├── docker-compose.yml
@@ -59,13 +65,28 @@ pnpm test
 docker compose up --build
 ```
 
+## Temporary Browser Check
+
+While the Browser Engine foundation is being integrated, the backend exposes:
+
+```bash
+GET /browser/test
+```
+
+The endpoint starts Chromium with Playwright, opens `https://example.com`, closes browser resources, and returns:
+
+```json
+{"browser":"ok"}
+```
+
 ## Scope
 
 This repository currently contains **foundation only**. The following are planned for future tasks:
 
-- Express HTTP server
-- Playwright browser automation
 - CadPrev scraping pipeline
+- Browser Manager
+- Parser
+- Cache
 
 ## License
 
