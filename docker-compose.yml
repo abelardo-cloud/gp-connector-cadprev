@@ -1,8 +1,8 @@
 services:
   gp-connector-cadprev:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: gp-connector-cadprev/Dockerfile
     container_name: gp-connector-cadprev
     ports:
       - "${PORT:-3000}:3000"

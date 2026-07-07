@@ -31,6 +31,7 @@ gp-connector-cadprev/
 
 - Node.js >= 22
 - pnpm >= 9
+- Local sibling checkout of `gp-sdk` at `../gp-sdk`
 
 ## Getting started
 
@@ -61,7 +62,64 @@ pnpm test
 ## Docker
 
 ```bash
+# From this directory
 docker compose up --build
+```
+
+Because `@govpilot/sdk` is consumed as `file:../gp-sdk`, Docker builds must use a context that contains both repositories:
+
+```bash
+# From C:\Projetos GovPilot
+docker build -f gp-connector-cadprev/Dockerfile .
+```
+
+The production image compiles `gp-sdk`, compiles this connector, installs Chromium dependencies for Playwright, and starts the compiled app with `pnpm start`.
+
+## Production
+
+The production entrypoint is:
+
+```bash
+pnpm start
+```
+
+This runs `node dist/index.js`. The server binds to `process.env.PORT`, falling back to `3000` when `PORT` is not set.
+
+Environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port. Railway provides this automatically. |
+| `CACHE_TTL_SECONDS` | `1800` | In-memory CRP response cache TTL. |
+
+## Deploy Railway
+
+Railway should build this service with Docker using a workspace context that includes:
+
+```text
+gp-sdk/
+gp-connector-cadprev/
+```
+
+The provided `railway.toml` expects that layout and points to:
+
+```toml
+dockerfilePath = "gp-connector-cadprev/Dockerfile"
+```
+
+Configure the Railway service with:
+
+- Builder: Dockerfile
+- Healthcheck path: `/health`
+- Environment:
+  - `NODE_ENV=production`
+  - `CACHE_TTL_SECONDS=1800`
+
+After deploy, validate:
+
+```bash
+curl https://<railway-domain>/health
+curl "https://<railway-domain>/api/v1/cadprev/crp?cnpj=82951229000176"
 ```
 
 ## Temporary Browser Check
