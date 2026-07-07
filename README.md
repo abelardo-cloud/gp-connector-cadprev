@@ -90,6 +90,7 @@ Environment variables:
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP server port. Railway provides this automatically. |
 | `CACHE_TTL_SECONDS` | `1800` | In-memory CRP response cache TTL. |
+| `PLAYWRIGHT_TIMEOUT` | `120000` | Playwright/CadPrev navigation timeout in milliseconds. |
 
 ## Deploy Railway
 
@@ -108,6 +109,9 @@ Configure the Railway service with:
 - Environment:
   - `NODE_ENV=production`
   - `CACHE_TTL_SECONDS=1800`
+  - `PLAYWRIGHT_TIMEOUT=120000`
+
+CadPrev Público can respond slowly in production environments. If navigation exceeds `PLAYWRIGHT_TIMEOUT`, the CRP endpoint returns HTTP `504` with a structured `CADPREV_TIMEOUT` JSON response.
 
 After deploy, validate:
 

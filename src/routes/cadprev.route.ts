@@ -1,7 +1,7 @@
 import { Router, type IRouter } from 'express';
 import { MemoryCache } from '../cache/MemoryCache.js';
 import { CadPrevClient } from '../cadprev/CadPrevClient.js';
-import type { CadPrevCrpResponse } from '../cadprev/CadPrevTypes.js';
+import type { CadPrevCrpResponse, CadPrevErrorResponse } from '../cadprev/CadPrevTypes.js';
 import { env } from '../config/env.js';
 
 export const cadPrevRouter: IRouter = Router();
@@ -58,6 +58,11 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
 
     res.json(response);
   } catch (error) {
+    if (isTimeoutError(error)) {
+      res.status(504).json(createCadPrevTimeoutResponse(error));
+      return;
+    }
+
     next(error);
   }
 });
@@ -80,4 +85,27 @@ function normalizeCnpj(cnpj: string): string {
 
 function buildCrpCacheKey(cnpj: string): string {
   return `cadprev:crp:cnpj:${cnpj}`;
+}
+
+function createCadPrevTimeoutResponse(error: unknown): CadPrevErrorResponse {
+  return {
+    status: 'error',
+    source: 'CadPrev Público',
+    code: 'CADPREV_TIMEOUT',
+    message: 'O CadPrev Público não respondeu dentro do tempo limite.',
+    details: error instanceof Error ? error.message : String(error),
+    consultado_em: new Date().toISOString(),
+  };
+}
+
+function isTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (error.name === 'BrowserTimeoutError' || error.name === 'TimeoutError') {
+    return true;
+  }
+
+  return isTimeoutError(error.cause);
 }

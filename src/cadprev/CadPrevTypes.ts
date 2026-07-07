@@ -48,3 +48,12 @@ export interface CadPrevCrpResponse extends CadPrevExtrato {
   cache: CadPrevCacheInfo;
   consultado_em: string;
 }
+
+export interface CadPrevErrorResponse {
+  status: 'error';
+  source: 'CadPrev Público';
+  code: 'CADPREV_TIMEOUT';
+  message: string;
+  details: string;
+  consultado_em: string;
+}

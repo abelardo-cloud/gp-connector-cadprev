@@ -1,10 +1,10 @@
 import { BrowserFactory, NavigationService } from '@govpilot/sdk';
 import { CadPrevCriteriaParser } from './CadPrevCriteriaParser.js';
 import type { CadPrevExtrato } from './CadPrevTypes.js';
+import { env } from '../config/env.js';
 
 const CADPREV_EXTRATO_URL =
   'https://cadprev.previdencia.gov.br/Cadprev/pages/publico/extrato/extratoExterno.xhtml';
-const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) GovPilotConnector/1.0.0 Safari/537.36';
 
@@ -16,7 +16,7 @@ export class CadPrevClient {
   public async consultarExtratoPorCnpj(cnpj: string): Promise<CadPrevExtrato> {
     const normalizedCnpj = normalizeCnpj(cnpj);
     const browserEngine = BrowserFactory.create({
-      timeoutMs: DEFAULT_TIMEOUT_MS,
+      timeoutMs: env.playwrightTimeoutMs,
     });
 
     try {
@@ -32,18 +32,21 @@ export class CadPrevClient {
 
       await navigation.open(this.buildExtratoUrl(normalizedCnpj), {
         waitUntil: 'domcontentloaded',
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      });
-      await navigation.waitForPageReady({
-        waitUntil: 'load',
-        timeoutMs: DEFAULT_TIMEOUT_MS,
+        timeoutMs: env.playwrightTimeoutMs,
       });
       await navigation.waitForSelector('body', {
-        timeoutMs: DEFAULT_TIMEOUT_MS,
+        timeoutMs: env.playwrightTimeoutMs,
       });
+      await page
+        .locator('body', {
+          hasText: /CRP Vigente|Extrato externo dos regimes previdenciários|CADPREV/,
+        })
+        .waitFor({
+          timeout: env.playwrightTimeoutMs,
+        });
 
       const pageText = await page.locator('body').innerText({
-        timeout: DEFAULT_TIMEOUT_MS,
+        timeout: env.playwrightTimeoutMs,
       });
 
       return extractBasicCrpData(pageText);
