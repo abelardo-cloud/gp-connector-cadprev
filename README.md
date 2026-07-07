@@ -104,7 +104,7 @@ gp-connector-cadprev/
 The provided `railway.toml` expects that layout and points to:
 
 ```toml
-dockerfilePath = "gp-connector-cadprev/Dockerfile"
+dockerfilePath = "/Dockerfile"
 ```
 
 Configure the Railway service with:
