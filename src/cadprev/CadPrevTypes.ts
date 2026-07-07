@@ -26,6 +26,11 @@ export interface CadPrevDiagnosticoBase {
   recomendacao: string;
 }
 
+export interface CadPrevCacheInfo {
+  hit: boolean;
+  ttl_seconds: number;
+}
+
 export interface CadPrevExtrato {
   ente: string;
   uf: string;
@@ -40,5 +45,6 @@ export interface CadPrevExtrato {
 export interface CadPrevCrpResponse extends CadPrevExtrato {
   fonte: 'CadPrev Público';
   url_consultada: string;
+  cache: CadPrevCacheInfo;
   consultado_em: string;
 }
