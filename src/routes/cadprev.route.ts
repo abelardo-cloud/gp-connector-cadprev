@@ -25,6 +25,9 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
       uf: extrato.uf,
       cnpj: extrato.cnpj,
       crp: extrato.crp,
+      resumo: extrato.resumo,
+      criterios: extrato.criterios,
+      criterios_irregulares: extrato.criterios_irregulares,
       consultado_em: new Date().toISOString(),
     };
 

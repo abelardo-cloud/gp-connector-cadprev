@@ -1,4 +1,5 @@
 import { BrowserFactory, NavigationService } from '@govpilot/sdk';
+import { CadPrevCriteriaParser } from './CadPrevCriteriaParser.js';
 import type { CadPrevExtrato } from './CadPrevTypes.js';
 
 const CADPREV_EXTRATO_URL =
@@ -80,6 +81,7 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
   const crpText = getValueAfterLabel(lines, 'CRP Vigente:');
   const crp = parseCrp(crpText);
   const uf = extractUf(ente);
+  const criteriaParseResult = new CadPrevCriteriaParser().parse(pageText);
 
   if (!ente || !cnpj || !uf || !crp.numero || !crp.emissao || !crp.validade) {
     throw new Error('CadPrev extract did not contain the expected basic CRP data');
@@ -90,6 +92,9 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
     uf,
     cnpj,
     crp,
+    resumo: criteriaParseResult.resumo,
+    criterios: criteriaParseResult.criterios,
+    criterios_irregulares: criteriaParseResult.criterios_irregulares,
   };
 }
 
