@@ -1,30 +1,30 @@
 FROM node:22-bookworm-slim AS production
 
 RUN apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates; \
+    apt-get install -y --no-install-recommends ca-certificates git; \
     rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable; \
     corepack prepare pnpm@9.15.9 --activate
 
-WORKDIR /workspace
+ARG GP_SDK_REPOSITORY=https://github.com/abelardo-cloud/gp-sdk.git
+ARG GP_SDK_REF=main
 
-COPY gp-sdk/package.json gp-sdk/pnpm-lock.yaml gp-sdk/tsconfig.json gp-sdk/tsconfig.build.json ./gp-sdk/
-COPY gp-sdk/src ./gp-sdk/src
+RUN git clone --depth 1 --branch "${GP_SDK_REF}" "${GP_SDK_REPOSITORY}" /gp-sdk
 
-WORKDIR /workspace/gp-sdk
+WORKDIR /gp-sdk
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
 
-WORKDIR /workspace/gp-connector-cadprev
+WORKDIR /app
 
-COPY gp-connector-cadprev/package.json gp-connector-cadprev/pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
 
-COPY gp-connector-cadprev/tsconfig.json ./
-COPY gp-connector-cadprev/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 
 RUN pnpm build
 RUN pnpm prune --prod

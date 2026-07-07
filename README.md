@@ -31,7 +31,7 @@ gp-connector-cadprev/
 
 - Node.js >= 22
 - pnpm >= 9
-- Local sibling checkout of `gp-sdk` at `../gp-sdk`
+- Local sibling checkout of `gp-sdk` at `../gp-sdk` for local development
 
 ## Getting started
 
@@ -66,14 +66,13 @@ pnpm test
 docker compose up --build
 ```
 
-Because `@govpilot/sdk` is consumed as `file:../gp-sdk`, Docker builds must use a context that contains both repositories:
+Docker builds use this repository as the build context:
 
 ```bash
-# From C:\Projetos GovPilot
-docker build -f gp-connector-cadprev/Dockerfile .
+docker build -f Dockerfile .
 ```
 
-The production image compiles `gp-sdk`, compiles this connector, installs Chromium dependencies for Playwright, and starts the compiled app with `pnpm start`.
+The production image clones and compiles `gp-sdk`, compiles this connector, installs Chromium dependencies for Playwright, and starts the compiled app with `pnpm start`.
 
 ## Production
 
@@ -94,18 +93,13 @@ Environment variables:
 
 ## Deploy Railway
 
-Railway should build this service with Docker using a workspace context that includes:
-
-```text
-gp-sdk/
-gp-connector-cadprev/
-```
-
-The provided `railway.toml` expects that layout and points to:
+The provided `railway.toml` points Railway to the Dockerfile at the repository root:
 
 ```toml
 dockerfilePath = "/Dockerfile"
 ```
+
+The Dockerfile resolves the local `file:../gp-sdk` dependency by cloning `gp-sdk` into `/gp-sdk` during image build.
 
 Configure the Railway service with:
 
