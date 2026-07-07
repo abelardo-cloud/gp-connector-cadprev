@@ -16,6 +16,7 @@ describe('CadPrevCriteriaParser', () => {
     const result = new CadPrevCriteriaParser().parse(pageText);
 
     expect(result.resumo).toEqual({
+      situacao_crp: 'Regular com pendências',
       total_criterios: 3,
       total_criterios_regulares: 2,
       total_criterios_irregulares: 1,

@@ -1,7 +1,8 @@
 export interface CadPrevCrp {
   numero: string;
-  emissao: string;
-  validade: string;
+  emitido_em: string;
+  vigente_ate: string;
+  data_pesquisa: string;
 }
 
 export interface CadPrevCriterio {
@@ -14,9 +15,15 @@ export interface CadPrevCriterio {
 }
 
 export interface CadPrevResumo {
+  situacao_crp: string;
   total_criterios: number;
   total_criterios_regulares: number;
   total_criterios_irregulares: number;
+}
+
+export interface CadPrevDiagnosticoBase {
+  impacto: string;
+  recomendacao: string;
 }
 
 export interface CadPrevExtrato {
@@ -27,6 +34,7 @@ export interface CadPrevExtrato {
   resumo: CadPrevResumo;
   criterios: CadPrevCriterio[];
   criterios_irregulares: CadPrevCriterio[];
+  diagnostico_base: CadPrevDiagnosticoBase;
 }
 
 export interface CadPrevCrpResponse extends CadPrevExtrato {

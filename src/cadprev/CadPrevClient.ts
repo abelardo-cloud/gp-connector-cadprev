@@ -80,10 +80,14 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
   const cnpj = getValueAfterLabel(lines, 'CNPJ Principal:');
   const crpText = getValueAfterLabel(lines, 'CRP Vigente:');
   const crp = parseCrp(crpText);
+  const dataPesquisa = getValueAfterLabel(lines, 'Data Pesquisa:');
   const uf = extractUf(ente);
   const criteriaParseResult = new CadPrevCriteriaParser().parse(pageText);
+  const diagnosticoBase = createDiagnosticoBase(
+    criteriaParseResult.resumo.total_criterios_irregulares,
+  );
 
-  if (!ente || !cnpj || !uf || !crp.numero || !crp.emissao || !crp.validade) {
+  if (!ente || !cnpj || !uf || !crp.numero || !crp.emitido_em || !crp.vigente_ate) {
     throw new Error('CadPrev extract did not contain the expected basic CRP data');
   }
 
@@ -91,10 +95,14 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
     ente,
     uf,
     cnpj,
-    crp,
+    crp: {
+      ...crp,
+      data_pesquisa: dataPesquisa,
+    },
     resumo: criteriaParseResult.resumo,
     criterios: criteriaParseResult.criterios,
     criterios_irregulares: criteriaParseResult.criterios_irregulares,
+    diagnostico_base: diagnosticoBase,
   };
 }
 
@@ -115,11 +123,26 @@ function parseCrp(crpText: string): CadPrevExtrato['crp'] {
 
   return {
     numero: match?.[1] ?? '',
-    emissao: match?.[2] ?? '',
-    validade: match?.[3] ?? '',
+    emitido_em: match?.[2] ?? '',
+    vigente_ate: match?.[3] ?? '',
+    data_pesquisa: '',
   };
 }
 
 function extractUf(ente: string): string {
   return ente.match(/-\s*([A-Z]{2})$/)?.[1] ?? '';
+}
+
+function createDiagnosticoBase(totalCriteriosIrregulares: number): CadPrevExtrato['diagnostico_base'] {
+  if (totalCriteriosIrregulares > 0) {
+    return {
+      impacto: 'Existem critérios irregulares no extrato do CRP.',
+      recomendacao: 'Regularizar os critérios irregulares indicados pelo CadPrev.',
+    };
+  }
+
+  return {
+    impacto: 'Não há critérios irregulares no extrato do CRP.',
+    recomendacao: 'Manter o acompanhamento periódico da situação do CRP no CadPrev.',
+  };
 }

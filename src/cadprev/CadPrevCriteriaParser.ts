@@ -16,6 +16,7 @@ export class CadPrevCriteriaParser {
 
     return {
       resumo: {
+        situacao_crp: criterios_irregulares.length > 0 ? 'Regular com pendências' : 'Regular',
         total_criterios: criterios.length,
         total_criterios_regulares: criterios.filter(isRegular).length,
         total_criterios_irregulares: criterios_irregulares.length,
