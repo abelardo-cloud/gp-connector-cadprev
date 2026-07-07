@@ -11,6 +11,7 @@ SERVICE_NAME="gp-connector-cadprev"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 CONNECTOR_DIR="${APP_ROOT}/gp-connector-cadprev"
 SDK_DIR="${APP_ROOT}/gp-sdk"
+APP_HOME="/home/${APP_USER}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root."
@@ -25,6 +26,7 @@ apt-get install -y \
   git \
   gnupg \
   lsb-release \
+  sudo \
   unzip \
   ufw \
   build-essential
@@ -80,30 +82,36 @@ apt-get install -y \
 
 echo "Creating application user and directory..."
 if ! id "${APP_USER}" >/dev/null 2>&1; then
-  useradd --system --create-home --shell /usr/sbin/nologin "${APP_USER}"
+  useradd --system --create-home --home-dir "${APP_HOME}" --shell /usr/sbin/nologin "${APP_USER}"
 fi
 
+mkdir -p "${APP_HOME}"
+mkdir -p "${APP_HOME}/.cache"
 mkdir -p "${APP_ROOT}"
+usermod --home "${APP_HOME}" "${APP_USER}"
+chown -R "${APP_USER}:${APP_USER}" "${APP_HOME}"
 chown -R "${APP_USER}:${APP_USER}" "${APP_ROOT}"
+chmod 750 "${APP_HOME}"
+chmod 755 "${APP_ROOT}"
 
 echo "Cloning or updating gp-sdk..."
 if [ ! -d "${SDK_DIR}/.git" ]; then
-  sudo -u "${APP_USER}" git clone "${GP_SDK_REPOSITORY}" "${SDK_DIR}"
+  sudo -H -u "${APP_USER}" git clone "${GP_SDK_REPOSITORY}" "${SDK_DIR}"
 fi
-sudo -u "${APP_USER}" git -C "${SDK_DIR}" fetch origin "${GP_SDK_REF}"
-sudo -u "${APP_USER}" git -C "${SDK_DIR}" checkout "${GP_SDK_REF}"
-sudo -u "${APP_USER}" git -C "${SDK_DIR}" pull --ff-only origin "${GP_SDK_REF}"
+sudo -H -u "${APP_USER}" git -C "${SDK_DIR}" fetch origin "${GP_SDK_REF}"
+sudo -H -u "${APP_USER}" git -C "${SDK_DIR}" checkout "${GP_SDK_REF}"
+sudo -H -u "${APP_USER}" git -C "${SDK_DIR}" pull --ff-only origin "${GP_SDK_REF}"
 
 echo "Building gp-sdk..."
-sudo -u "${APP_USER}" bash -lc "cd '${SDK_DIR}'; pnpm install; pnpm build"
+sudo -H -u "${APP_USER}" bash -lc "cd '${SDK_DIR}'; pnpm install; pnpm build"
 
 echo "Cloning or updating gp-connector-cadprev..."
 if [ ! -d "${CONNECTOR_DIR}/.git" ]; then
-  sudo -u "${APP_USER}" git clone "${GP_CONNECTOR_REPOSITORY}" "${CONNECTOR_DIR}"
+  sudo -H -u "${APP_USER}" git clone "${GP_CONNECTOR_REPOSITORY}" "${CONNECTOR_DIR}"
 fi
-sudo -u "${APP_USER}" git -C "${CONNECTOR_DIR}" fetch origin "${GP_CONNECTOR_REF}"
-sudo -u "${APP_USER}" git -C "${CONNECTOR_DIR}" checkout "${GP_CONNECTOR_REF}"
-sudo -u "${APP_USER}" git -C "${CONNECTOR_DIR}" pull --ff-only origin "${GP_CONNECTOR_REF}"
+sudo -H -u "${APP_USER}" git -C "${CONNECTOR_DIR}" fetch origin "${GP_CONNECTOR_REF}"
+sudo -H -u "${APP_USER}" git -C "${CONNECTOR_DIR}" checkout "${GP_CONNECTOR_REF}"
+sudo -H -u "${APP_USER}" git -C "${CONNECTOR_DIR}" pull --ff-only origin "${GP_CONNECTOR_REF}"
 
 echo "Creating production environment file..."
 if [ ! -f "${CONNECTOR_DIR}/.env" ]; then
@@ -118,7 +126,14 @@ ENVEOF
 fi
 
 echo "Building gp-connector-cadprev..."
-sudo -u "${APP_USER}" bash -lc "cd '${CONNECTOR_DIR}'; pnpm install; pnpm exec playwright install chromium; pnpm build"
+sudo -H -u "${APP_USER}" bash -lc "cd '${CONNECTOR_DIR}'; pnpm install; pnpm exec playwright install chromium; pnpm build"
+
+echo "Ensuring application permissions..."
+mkdir -p "${APP_HOME}/.cache"
+chown -R "${APP_USER}:${APP_USER}" "${APP_HOME}"
+chown -R "${APP_USER}:${APP_USER}" "${APP_ROOT}"
+chmod 750 "${APP_HOME}"
+chmod 755 "${APP_ROOT}"
 
 echo "Creating systemd service..."
 cat > "${SERVICE_FILE}" <<EOF
@@ -135,13 +150,15 @@ WorkingDirectory=${CONNECTOR_DIR}
 EnvironmentFile=${CONNECTOR_DIR}/.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=HOME=${APP_HOME}
+Environment=XDG_CACHE_HOME=${APP_HOME}/.cache
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
-ReadWritePaths=${CONNECTOR_DIR}
+ReadWritePaths=${CONNECTOR_DIR} ${APP_HOME}
 
 [Install]
 WantedBy=multi-user.target
