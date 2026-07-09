@@ -17,36 +17,40 @@ interface StateQuery {
   displayName: string;
   article: 'da' | 'de' | 'do';
   uf: string;
+  acceptedForms: string[];
 }
 
 const STATE_QUERIES: StateQuery[] = [
-  { name: 'acre', displayName: 'Acre', article: 'do', uf: 'AC' },
-  { name: 'alagoas', displayName: 'Alagoas', article: 'de', uf: 'AL' },
-  { name: 'amapa', displayName: 'Amapá', article: 'do', uf: 'AP' },
-  { name: 'amazonas', displayName: 'Amazonas', article: 'do', uf: 'AM' },
-  { name: 'bahia', displayName: 'Bahia', article: 'da', uf: 'BA' },
-  { name: 'ceara', displayName: 'Ceará', article: 'do', uf: 'CE' },
-  { name: 'distrito federal', displayName: 'Distrito Federal', article: 'do', uf: 'DF' },
-  { name: 'espirito santo', displayName: 'Espírito Santo', article: 'do', uf: 'ES' },
-  { name: 'goias', displayName: 'Goiás', article: 'de', uf: 'GO' },
-  { name: 'maranhao', displayName: 'Maranhão', article: 'do', uf: 'MA' },
-  { name: 'mato grosso', displayName: 'Mato Grosso', article: 'do', uf: 'MT' },
-  { name: 'mato grosso do sul', displayName: 'Mato Grosso do Sul', article: 'do', uf: 'MS' },
-  { name: 'minas gerais', displayName: 'Minas Gerais', article: 'de', uf: 'MG' },
-  { name: 'para', displayName: 'Pará', article: 'do', uf: 'PA' },
-  { name: 'paraiba', displayName: 'Paraíba', article: 'da', uf: 'PB' },
-  { name: 'parana', displayName: 'Paraná', article: 'do', uf: 'PR' },
-  { name: 'pernambuco', displayName: 'Pernambuco', article: 'de', uf: 'PE' },
-  { name: 'piaui', displayName: 'Piauí', article: 'do', uf: 'PI' },
-  { name: 'rio de janeiro', displayName: 'Rio de Janeiro', article: 'do', uf: 'RJ' },
-  { name: 'rio grande do norte', displayName: 'Rio Grande do Norte', article: 'do', uf: 'RN' },
-  { name: 'rio grande do sul', displayName: 'Rio Grande do Sul', article: 'do', uf: 'RS' },
-  { name: 'rondonia', displayName: 'Rondônia', article: 'de', uf: 'RO' },
-  { name: 'roraima', displayName: 'Roraima', article: 'de', uf: 'RR' },
-  { name: 'santa catarina', displayName: 'Santa Catarina', article: 'de', uf: 'SC' },
-  { name: 'sao paulo', displayName: 'São Paulo', article: 'de', uf: 'SP' },
-  { name: 'sergipe', displayName: 'Sergipe', article: 'de', uf: 'SE' },
-  { name: 'tocantins', displayName: 'Tocantins', article: 'do', uf: 'TO' },
+  createStateQuery('Acre', 'AC', 'do'),
+  createStateQuery('Alagoas', 'AL', 'de'),
+  createStateQuery('Amapá', 'AP', 'do'),
+  createStateQuery('Amazonas', 'AM', 'do'),
+  createStateQuery('Bahia', 'BA', 'da', ['Estado de Bahia']),
+  createStateQuery('Ceará', 'CE', 'do'),
+  createStateQuery('Distrito Federal', 'DF', 'do', [
+    'Distrito Federal',
+    'Governo do Distrito Federal',
+  ]),
+  createStateQuery('Espírito Santo', 'ES', 'do'),
+  createStateQuery('Goiás', 'GO', 'de'),
+  createStateQuery('Maranhão', 'MA', 'do'),
+  createStateQuery('Mato Grosso', 'MT', 'do'),
+  createStateQuery('Mato Grosso do Sul', 'MS', 'do'),
+  createStateQuery('Minas Gerais', 'MG', 'de'),
+  createStateQuery('Pará', 'PA', 'do', ['Estado de Pará']),
+  createStateQuery('Paraíba', 'PB', 'da', ['Estado de Paraíba']),
+  createStateQuery('Paraná', 'PR', 'do'),
+  createStateQuery('Pernambuco', 'PE', 'de'),
+  createStateQuery('Piauí', 'PI', 'do'),
+  createStateQuery('Rio de Janeiro', 'RJ', 'do'),
+  createStateQuery('Rio Grande do Norte', 'RN', 'do'),
+  createStateQuery('Rio Grande do Sul', 'RS', 'do'),
+  createStateQuery('Rondônia', 'RO', 'de'),
+  createStateQuery('Roraima', 'RR', 'de'),
+  createStateQuery('Santa Catarina', 'SC', 'de'),
+  createStateQuery('São Paulo', 'SP', 'de'),
+  createStateQuery('Sergipe', 'SE', 'de'),
+  createStateQuery('Tocantins', 'TO', 'do'),
 ];
 
 export function selectBestEnteSearchResult(
@@ -169,11 +173,19 @@ function scoreStateResult(result: CadPrevEnteSearchResult, stateQuery: StateQuer
     score += 30;
   }
 
-  if (
-    normalizedText.includes(`estado do ${stateQuery.name}`) ||
-    normalizedText.includes(`estado de ${stateQuery.name}`)
-  ) {
+  if (stateQuery.acceptedForms.some((form) => normalizedText.includes(form))) {
     score += 30;
+  }
+
+  if (normalizedText.includes(`${stateQuery.name} - ${stateQuery.uf.toLowerCase()}`)) {
+    score += 20;
+  }
+
+  if (
+    normalizedText.includes(`governo do estado - ${stateQuery.uf.toLowerCase()}`) ||
+    normalizedText.includes(`governo do estado ${stateQuery.uf.toLowerCase()}`)
+  ) {
+    score += 20;
   }
 
   if (normalizedText.includes(stateQuery.name)) {
@@ -191,11 +203,43 @@ function isStateResult(result: CadPrevEnteSearchResult, stateQuery: StateQuery):
   const normalizedText = normalizeSearchText(`${result.ente} ${result.text}`);
 
   return (
-    normalizedText.includes('governo do estado') ||
-    normalizedText.includes('estado de governo do estado') ||
-    normalizedText.includes(`estado do ${stateQuery.name}`) ||
-    normalizedText.includes(`estado de ${stateQuery.name}`)
+    stateQuery.acceptedForms.some((form) => normalizedText.includes(form)) ||
+    normalizedText.includes(`${stateQuery.name} - ${stateQuery.uf.toLowerCase()}`) ||
+    normalizedText.includes(`governo do estado - ${stateQuery.uf.toLowerCase()}`) ||
+    normalizedText.includes(`governo do estado ${stateQuery.uf.toLowerCase()}`)
   );
+}
+
+function createStateQuery(
+  displayName: string,
+  uf: string,
+  article: StateQuery['article'],
+  extraAcceptedForms: string[] = [],
+): StateQuery {
+  const name = normalizeSearchText(displayName);
+  const acceptedForms = [
+    displayName,
+    `${displayName} - ${uf}`,
+    `Estado ${article} ${displayName}`,
+    `Estado de ${displayName}`,
+    `Estado do ${displayName}`,
+    `Estado da ${displayName}`,
+    `Governo do Estado ${article} ${displayName}`,
+    `Governo do Estado - ${uf}`,
+    `Estado de Governo do Estado ${article} ${displayName}`,
+    `Estado de Governo do Estado de ${displayName}`,
+    `Estado de Governo do Estado do ${displayName}`,
+    `Estado de Governo do Estado da ${displayName}`,
+    ...extraAcceptedForms,
+  ].map(normalizeSearchText);
+
+  return {
+    name,
+    displayName,
+    article,
+    uf,
+    acceptedForms: [...new Set(acceptedForms)],
+  };
 }
 
 function normalizeSearchText(value: string): string {
