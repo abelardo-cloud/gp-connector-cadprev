@@ -1,6 +1,12 @@
 import { BrowserFactory, NavigationService } from '@govpilot/sdk';
 import type { Page } from 'playwright';
 import { CadPrevCriteriaParser } from './CadPrevCriteriaParser.js';
+import {
+  CadPrevEnteSearchAmbiguityError,
+  getStateSearchFallbackQueries,
+  selectBestEnteSearchResult,
+  type CadPrevEnteSearchResult,
+} from './CadPrevEnteSearchResultSelector.js';
 import type { CadPrevExtrato } from './CadPrevTypes.js';
 import { env } from '../config/env.js';
 
@@ -221,7 +227,7 @@ async function openExtratoByEnte(
   }
 
   steps.push('click-result');
-  await clickEnteSearchResult(page, ente);
+  await clickEnteSearchResultWithFallback(page, navigation, ente, steps);
 
   if (await isCrpListPage(page)) {
     steps.push('click-crp-row');
@@ -266,38 +272,105 @@ async function submitEnteSearch(page: Page): Promise<void> {
   ]);
 }
 
-async function clickEnteSearchResult(page: Page, ente: string): Promise<void> {
-  const matchingRows = page.locator('tr', {
-    hasText: new RegExp(escapeRegExp(ente), 'i'),
-  });
-  const rowCount = Math.min(await matchingRows.count(), 3);
+async function clickEnteSearchResultWithFallback(
+  page: Page,
+  navigation: NavigationService,
+  ente: string,
+  steps: string[],
+): Promise<void> {
+  try {
+    await clickEnteSearchResult(page, ente);
+    return;
+  } catch (error) {
+    if (!(error instanceof CadPrevEnteSearchAmbiguityError)) {
+      throw error;
+    }
 
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    const row = matchingRows.nth(rowIndex);
-    const actions = row.locator('a, input[type="submit"], button, [onclick], img, span');
-    const actionCount = Math.min(await actions.count(), 5);
+    const fallbackQueries = getStateSearchFallbackQueries(ente).filter(
+      (fallbackQuery) => normalizeText(fallbackQuery) !== normalizeText(ente),
+    );
 
-    for (let actionIndex = 0; actionIndex < actionCount; actionIndex += 1) {
+    for (const fallbackQuery of fallbackQueries) {
       try {
-        await actions.nth(actionIndex).click({
-          timeout: getStepTimeout(),
+        steps.push(`retry-state-search:${fallbackQuery}`);
+        await navigation.open(CADPREV_ENTE_SEARCH_URL, {
+          waitUntil: 'domcontentloaded',
+          timeoutMs: env.playwrightTimeoutMs,
         });
-        await Promise.allSettled([
-          page.waitForLoadState('domcontentloaded', {
+        await page
+          .locator('body', {
+            hasText: /Pesquisar Ente|Ente/i,
+          })
+          .waitFor({
             timeout: getStepTimeout(),
-          }),
-          waitForExtrato(page, CLICK_RESULT_TIMEOUT_MS),
-        ]);
-        if ((await isExtratoLoaded(page)) || (await isCrpListPage(page))) {
-          return;
+          });
+        await fillEnteSearchField(page, fallbackQuery);
+        await submitEnteSearch(page);
+        await page
+          .locator('body', {
+            hasText: /UF|Ente|Selecionar|Estado/i,
+          })
+          .waitFor({
+            timeout: getStepTimeout(),
+          });
+        await clickEnteSearchResult(page, fallbackQuery);
+        return;
+      } catch (fallbackError) {
+        if (!(fallbackError instanceof CadPrevEnteSearchAmbiguityError)) {
+          throw fallbackError;
         }
-      } catch {
-        // Try the next actionable element in the matching result row.
       }
     }
 
+    throw error;
+  }
+}
+
+async function clickEnteSearchResult(page: Page, ente: string): Promise<void> {
+  const result = selectBestEnteSearchResult(await extractEnteSearchResults(page), ente);
+  const row = page.locator('tr').nth(result.rowIndex);
+
+  await clickEnteResultRow(page, row);
+}
+
+async function extractEnteSearchResults(page: Page): Promise<CadPrevEnteSearchResult[]> {
+  const rows = page.locator('tr');
+  const rowCount = await rows.count();
+  const results: CadPrevEnteSearchResult[] = [];
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = rows.nth(rowIndex);
+    const cells = row.locator('td');
+    const cellCount = await cells.count();
+
+    if (cellCount < 2) {
+      continue;
+    }
+
+    const uf = await cells.nth(0).innerText({ timeout: getStepTimeout() });
+    const ente = await cells.nth(1).innerText({ timeout: getStepTimeout() });
+    const text = await row.innerText({ timeout: getStepTimeout() });
+
+    if (/^[A-Z]{2}$/.test(uf.trim()) && ente.trim()) {
+      results.push({
+        rowIndex,
+        uf: uf.trim(),
+        ente: ente.trim(),
+        text: text.trim(),
+      });
+    }
+  }
+
+  return results;
+}
+
+async function clickEnteResultRow(page: Page, row: ReturnType<Page['locator']>): Promise<void> {
+  const actions = row.locator('a, input[type="submit"], button, [onclick], img, span');
+  const actionCount = Math.min(await actions.count(), 5);
+
+  for (let actionIndex = 0; actionIndex < actionCount; actionIndex += 1) {
     try {
-      await row.locator('td').last().click({
+      await actions.nth(actionIndex).click({
         timeout: getStepTimeout(),
       });
       await Promise.allSettled([
@@ -310,11 +383,28 @@ async function clickEnteSearchResult(page: Page, ente: string): Promise<void> {
         return;
       }
     } catch {
-      // Try the next matching row.
+      // Try the next actionable element in the selected result row.
     }
   }
 
-  throw new Error(`CadPrev search result not found for ente: ${ente}`);
+  try {
+    await row.locator('td').last().click({
+      timeout: getStepTimeout(),
+    });
+    await Promise.allSettled([
+      page.waitForLoadState('domcontentloaded', {
+        timeout: getStepTimeout(),
+      }),
+      waitForExtrato(page, CLICK_RESULT_TIMEOUT_MS),
+    ]);
+    if ((await isExtratoLoaded(page)) || (await isCrpListPage(page))) {
+      return;
+    }
+  } catch {
+    // Fall through to the controlled not-clicked error.
+  }
+
+  throw new Error('Selected CadPrev search result could not be opened');
 }
 
 async function clickCrpListResult(page: Page): Promise<void> {

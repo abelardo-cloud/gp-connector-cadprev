@@ -1,6 +1,7 @@
 import { Router, type IRouter } from 'express';
 import { MemoryCache } from '../cache/MemoryCache.js';
 import { CadPrevClient } from '../cadprev/CadPrevClient.js';
+import { CadPrevEnteSearchAmbiguityError } from '../cadprev/CadPrevEnteSearchResultSelector.js';
 import type { CadPrevCrpResponse, CadPrevErrorResponse } from '../cadprev/CadPrevTypes.js';
 import { env } from '../config/env.js';
 
@@ -75,6 +76,18 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
   } catch (error) {
     if (isTimeoutError(error)) {
       res.status(504).json(createCadPrevTimeoutResponse(error));
+      return;
+    }
+
+    if (error instanceof CadPrevEnteSearchAmbiguityError) {
+      res.status(422).json({
+        status: 'error',
+        source: 'CadPrev Público',
+        code: 'CADPREV_ENTE_AMBIGUOUS',
+        message: 'A busca por ente no CadPrev retornou resultados ambíguos.',
+        details: error.message,
+        consultado_em: new Date().toISOString(),
+      });
       return;
     }
 
