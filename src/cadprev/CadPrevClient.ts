@@ -17,6 +17,7 @@ const CADPREV_ENTE_SEARCH_URL =
 const BODY_PREVIEW_LENGTH = 2_000;
 const STEP_TIMEOUT_MS = 30_000;
 const CLICK_RESULT_TIMEOUT_MS = 5_000;
+const CRP_LABEL_PATTERN = /CRP Vigente|Último CRP|Extrato externo dos regimes previdenciários/;
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) GovPilotConnector/1.0.0 Safari/537.36';
 
@@ -72,7 +73,7 @@ export class CadPrevClient {
       });
       await page
         .locator('body', {
-          hasText: /CRP Vigente|Extrato externo dos regimes previdenciários|CADPREV/,
+          hasText: /CRP Vigente|Último CRP|Extrato externo dos regimes previdenciários|CADPREV/,
         })
         .waitFor({
           timeout: env.playwrightTimeoutMs,
@@ -215,7 +216,7 @@ async function openExtratoByEnte(
   steps.push('wait-search-result');
   await page
     .locator('body', {
-      hasText: new RegExp(escapeRegExp(ente), 'i'),
+      hasText: /UF|Ente|Selecionar|Estado|Município/i,
     })
     .waitFor({
       timeout: getStepTimeout(),
@@ -486,7 +487,10 @@ async function isExtratoLoaded(page: Page): Promise<boolean> {
     timeout: getStepTimeout(),
   });
 
-  return bodyText.includes('CRP Vigente') && bodyText.includes('Ente Federado:');
+  return (
+    (bodyText.includes('CRP Vigente') || bodyText.includes('Último CRP')) &&
+    bodyText.includes('Ente Federado:')
+  );
 }
 
 async function isCrpListPage(page: Page): Promise<boolean> {
@@ -500,7 +504,7 @@ async function isCrpListPage(page: Page): Promise<boolean> {
 async function waitForExtrato(page: Page, timeoutMs = getStepTimeout()): Promise<void> {
   await page
     .locator('body', {
-      hasText: /CRP Vigente|Extrato externo dos regimes previdenciários/,
+      hasText: CRP_LABEL_PATTERN,
     })
     .waitFor({
       timeout: timeoutMs,
@@ -517,10 +521,6 @@ function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase();
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function serializeError(error: unknown): SerializedError {

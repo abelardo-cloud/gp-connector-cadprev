@@ -21,6 +21,12 @@ describe('selectBestEnteSearchResult', () => {
       state: 'Estado de Governo do Estado de Alagoas',
     },
     {
+      query: 'Ceará',
+      uf: 'CE',
+      municipality: 'Município de Ceará-Mirim',
+      state: 'Estado de Governo do Estado do Ceará',
+    },
+    {
       query: 'Pará',
       uf: 'PA',
       municipality: 'Município de Morpará',
@@ -67,6 +73,12 @@ describe('selectBestEnteSearchResult', () => {
       uf: 'PE',
       municipality: 'Município de Brejo da Madre de Deus',
       state: 'Governo do Estado de Pernambuco',
+    },
+    {
+      query: 'Rio de Janeiro',
+      uf: 'RJ',
+      municipality: 'Município de Rio das Ostras',
+      state: 'Estado de Governo do Estado do Rio de Janeiro',
     },
     {
       query: 'Rio Grande do Norte',
@@ -129,13 +141,36 @@ describe('selectBestEnteSearchResult', () => {
     ).toThrow(CadPrevEnteSearchAmbiguityError);
   });
 
+  it('selects Ceará state when the query is unaccented', () => {
+    const selected = selectBestEnteSearchResult(
+      [
+        createResult(0, 'CE', 'Município de Ceará-Mirim'),
+        createResult(1, 'CE', 'Estado de Governo do Estado do Ceará'),
+      ],
+      'Ceara',
+    );
+
+    expect(selected.ente).toBe('Estado de Governo do Estado do Ceará');
+    expect(selected.uf).toBe('CE');
+  });
+
   it.each([
     ['Pará', 'BA', 'Município de Morpará'],
     ['São Paulo', 'AM', 'Município de São Paulo de Olivença'],
+    ['Ceará', 'RN', 'Município de Ceará-Mirim'],
   ])('rejects municipality %s false positive', (query, uf, municipality) => {
     expect(() => selectBestEnteSearchResult([createResult(0, uf, municipality)], query)).toThrow(
       CadPrevEnteSearchAmbiguityError,
     );
+  });
+
+  it('rejects Ceará state-like result from a divergent UF', () => {
+    expect(() =>
+      selectBestEnteSearchResult(
+        [createResult(0, 'RN', 'Estado de Governo do Estado do Ceará')],
+        'Ceará',
+      ),
+    ).toThrow(CadPrevEnteSearchAmbiguityError);
   });
 
   it('builds official state fallback queries', () => {
