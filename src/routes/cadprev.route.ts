@@ -2,12 +2,23 @@ import { Router, type IRouter } from 'express';
 import { MemoryCache } from '../cache/MemoryCache.js';
 import { CadPrevClient } from '../cadprev/CadPrevClient.js';
 import { CadPrevEnteSearchAmbiguityError } from '../cadprev/CadPrevEnteSearchResultSelector.js';
+import { CadPrevRequestScheduler } from '../cadprev/CadPrevRequestScheduler.js';
+import {
+  CadPrevRetryExhaustedError,
+  executeWithCadPrevRetry,
+  type CadPrevRetryMetadata,
+} from '../cadprev/CadPrevRetryPolicy.js';
 import { cadPrevSourceStatus, type CadPrevSourceErrorOrigin } from '../cadprev/CadPrevSourceStatus.js';
+import type { CadPrevExtrato } from '../cadprev/CadPrevTypes.js';
 import type { CadPrevCrpResponse, CadPrevErrorResponse } from '../cadprev/CadPrevTypes.js';
 import { env } from '../config/env.js';
 
 export const cadPrevRouter: IRouter = Router();
 const crpResponseCache = new MemoryCache<CadPrevCrpResponse>();
+const cadPrevRequestScheduler = new CadPrevRequestScheduler({
+  maxConcurrentRequests: env.cadPrevMaxConcurrentRequests,
+  minRequestIntervalMs: env.cadPrevMinRequestIntervalMs,
+});
 type CadPrevUnavailableErrorOrigin = Exclude<CadPrevSourceErrorOrigin, 'connector_internal'>;
 
 cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
@@ -47,10 +58,27 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
   const cadPrevClient = new CadPrevClient();
 
   try {
-    const extrato =
-      query.type === 'cnpj'
-        ? await cadPrevClient.consultarExtratoPorCnpj(query.value)
-        : await cadPrevClient.consultarExtratoPorEnte(query.value);
+    const { value: extrato } = await cadPrevRequestScheduler.schedule(
+      () =>
+        executeWithCadPrevRetry(
+          () => consultarCadPrev(cadPrevClient, query),
+          cadPrevRetryClassifier,
+          {
+            retryAttempts: env.cadPrevRetryAttempts,
+            initialBackoffMs: env.cadPrevRetryBackoffInitialMs,
+            maxBackoffMs: env.cadPrevRetryBackoffMaxMs,
+            jitterMs: env.cadPrevRetryJitterMs,
+          },
+          {
+            query_type: query.type,
+            query_value: query.value,
+          },
+        ),
+      {
+        query_type: query.type,
+        query_value: query.value,
+      },
+    );
     cadPrevSourceStatus.markAvailable();
     const response: CadPrevCrpResponse = {
       fonte: 'CadPrev Público',
@@ -77,27 +105,32 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
 
     res.json(response);
   } catch (error) {
-    if (isTimeoutError(error)) {
+    const observedError = getObservedError(error);
+    const retryMetadata = getRetryMetadata(error);
+
+    if (isTimeoutError(observedError)) {
       cadPrevSourceStatus.markUnavailable({
         code: 'CADPREV_TIMEOUT',
         message: 'O CadPrev Público não respondeu dentro do tempo limite.',
         origin: 'browser_runtime',
+        possible_source_limitation: retryMetadata?.possible_source_limitation,
       });
-      res.status(504).json(createCadPrevTimeoutResponse(error));
+      res.status(504).json(createCadPrevTimeoutResponse(observedError, retryMetadata));
       return;
     }
 
-    if (isSourceUnavailableError(error)) {
+    if (isSourceUnavailableError(observedError)) {
       cadPrevSourceStatus.markUnavailable({
         code: 'CADPREV_UNAVAILABLE',
         message: 'O CadPrev Público encontra-se indisponível no momento.',
-        origin: resolveUnavailableErrorOrigin(error),
+        origin: resolveUnavailableErrorOrigin(observedError),
+        possible_source_limitation: retryMetadata?.possible_source_limitation,
       });
-      res.status(503).json(createCadPrevUnavailableResponse(error));
+      res.status(503).json(createCadPrevUnavailableResponse(observedError, retryMetadata));
       return;
     }
 
-    if (isUnexpectedCadPrevContentError(error)) {
+    if (isUnexpectedCadPrevContentError(observedError)) {
       cadPrevSourceStatus.markDegraded({
         code: 'CADPREV_UNEXPECTED_CONTENT',
         message: 'O CadPrev Público respondeu com conteúdo insuficiente ou inesperado.',
@@ -105,19 +138,19 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
       });
     }
 
-    if (error instanceof CadPrevEnteSearchAmbiguityError) {
+    if (observedError instanceof CadPrevEnteSearchAmbiguityError) {
       res.status(422).json({
         status: 'error',
         source: 'CadPrev Público',
         code: 'CADPREV_ENTE_AMBIGUOUS',
         message: 'A busca por ente no CadPrev retornou resultados ambíguos.',
-        details: error.message,
+        details: observedError.message,
         consultado_em: new Date().toISOString(),
       });
       return;
     }
 
-    next(error);
+    next(observedError);
   }
 });
 
@@ -149,7 +182,52 @@ function buildCrpCacheKey(type: 'cnpj' | 'ente', value: string): string {
   return `cadprev:crp:${type}:${value.toLowerCase()}`;
 }
 
-export function createCadPrevTimeoutResponse(error: unknown): CadPrevErrorResponse {
+function consultarCadPrev(
+  cadPrevClient: CadPrevClient,
+  query: { type: 'cnpj' | 'ente'; value: string },
+): Promise<CadPrevExtrato> {
+  return query.type === 'cnpj'
+    ? cadPrevClient.consultarExtratoPorCnpj(query.value)
+    : cadPrevClient.consultarExtratoPorEnte(query.value);
+}
+
+const cadPrevRetryClassifier = {
+  getRetryReason(error: unknown): string | null {
+    if (isTimeoutError(error)) {
+      return 'timeout';
+    }
+
+    if (isSourceUnavailableError(error)) {
+      return 'source_unavailable';
+    }
+
+    return null;
+  },
+  getFinalErrorCode(error: unknown): string {
+    if (isTimeoutError(error)) {
+      return 'CADPREV_TIMEOUT';
+    }
+
+    if (isSourceUnavailableError(error)) {
+      return 'CADPREV_UNAVAILABLE';
+    }
+
+    if (error instanceof CadPrevEnteSearchAmbiguityError) {
+      return 'CADPREV_ENTE_AMBIGUOUS';
+    }
+
+    if (isUnexpectedCadPrevContentError(error)) {
+      return 'CADPREV_UNEXPECTED_CONTENT';
+    }
+
+    return 'CONNECTOR_INTERNAL_ERROR';
+  },
+};
+
+export function createCadPrevTimeoutResponse(
+  error: unknown,
+  retryMetadata?: CadPrevRetryMetadata,
+): CadPrevErrorResponse {
   return {
     status: 'error',
     source: 'CadPrev Público',
@@ -157,11 +235,15 @@ export function createCadPrevTimeoutResponse(error: unknown): CadPrevErrorRespon
     message: 'O CadPrev Público não respondeu dentro do tempo limite.',
     details: error instanceof Error ? error.message : String(error),
     error_origin: 'browser_runtime',
+    possible_source_limitation: retryMetadata?.possible_source_limitation,
     consultado_em: new Date().toISOString(),
   };
 }
 
-export function createCadPrevUnavailableResponse(error: unknown): CadPrevErrorResponse {
+export function createCadPrevUnavailableResponse(
+  error: unknown,
+  retryMetadata?: CadPrevRetryMetadata,
+): CadPrevErrorResponse {
   return {
     status: 'error',
     source: 'CadPrev Público',
@@ -169,6 +251,7 @@ export function createCadPrevUnavailableResponse(error: unknown): CadPrevErrorRe
     message: 'O CadPrev Público encontra-se indisponível no momento.',
     details: error instanceof Error ? error.message : String(error),
     error_origin: resolveUnavailableErrorOrigin(error),
+    possible_source_limitation: retryMetadata?.possible_source_limitation,
     consultado_em: new Date().toISOString(),
   };
 }
@@ -237,4 +320,12 @@ export function isUnexpectedCadPrevContentError(error: unknown): boolean {
     error instanceof Error &&
     error.message === 'CadPrev extract did not contain the expected basic CRP data'
   );
+}
+
+function getObservedError(error: unknown): unknown {
+  return error instanceof CadPrevRetryExhaustedError ? error.cause : error;
+}
+
+function getRetryMetadata(error: unknown): CadPrevRetryMetadata | undefined {
+  return error instanceof CadPrevRetryExhaustedError ? error.metadata : undefined;
 }

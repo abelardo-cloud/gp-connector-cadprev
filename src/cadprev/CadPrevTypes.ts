@@ -56,5 +56,6 @@ export interface CadPrevErrorResponse {
   message: string;
   details: string;
   error_origin?: 'browser_runtime' | 'connector_network' | 'official_source';
+  possible_source_limitation?: boolean;
   consultado_em: string;
 }

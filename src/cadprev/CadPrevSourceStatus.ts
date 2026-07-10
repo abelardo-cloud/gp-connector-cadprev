@@ -10,6 +10,7 @@ export interface CadPrevSourceStatusError {
   code: string;
   message: string;
   origin: CadPrevSourceErrorOrigin;
+  possible_source_limitation?: boolean;
 }
 
 export interface CadPrevSourceStatusSnapshot {
