@@ -60,6 +60,9 @@ function createExtrato(): CadPrevExtrato {
       emitido_em: '01/01/2026',
       vigente_ate: '01/07/2026',
       data_pesquisa: '10/07/2026',
+      is_current: true,
+      lifecycle_status: 'current',
+      source_label: 'CRP Vigente',
     },
     resumo: {
       situacao_crp: 'Regular',

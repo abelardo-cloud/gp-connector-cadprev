@@ -574,8 +574,8 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
 
   const ente = getValueAfterLabel(lines, 'Ente Federado:');
   const cnpj = getValueAfterLabel(lines, 'CNPJ Principal:');
-  const crpText = getValueAfterLabel(lines, 'CRP Vigente:');
-  const crp = parseCrp(crpText);
+  const crpSource = getCrpSource(lines);
+  const crp = parseCrp(crpSource.text, crpSource.label);
   const dataPesquisa = getValueAfterLabel(lines, 'Data Pesquisa:');
   const uf = extractUf(ente);
   const criteriaParseResult = new CadPrevCriteriaParser().parse(pageText);
@@ -583,7 +583,15 @@ function extractBasicCrpData(pageText: string): CadPrevExtrato {
     criteriaParseResult.resumo.total_criterios_irregulares,
   );
 
-  if (!ente || !cnpj || !uf || !crp.numero || !crp.emitido_em || !crp.vigente_ate) {
+  if (
+    !ente ||
+    !cnpj ||
+    !uf ||
+    !crp.numero ||
+    !crp.emitido_em ||
+    !crp.vigente_ate ||
+    !crp.source_label
+  ) {
     throw new Error('CadPrev extract did not contain the expected basic CRP data');
   }
 
@@ -612,16 +620,44 @@ function getValueAfterLabel(lines: string[], label: string): string {
   return lines[labelIndex + 1] ?? '';
 }
 
-function parseCrp(crpText: string): CadPrevExtrato['crp'] {
-  const match = crpText.match(
-    /N[ºo]\s*([\d-]+),\s*emitido em\s*(\d{2}\/\d{2}\/\d{4}),\s*estar[aá]\s+vigente até\s*(\d{2}\/\d{2}\/\d{4})/i,
-  );
+function getCrpSource(lines: string[]): { label: CadPrevExtrato['crp']['source_label']; text: string } {
+  const currentCrpText = getValueAfterLabel(lines, 'CRP Vigente:');
+
+  if (currentCrpText) {
+    return {
+      label: 'CRP Vigente',
+      text: currentCrpText,
+    };
+  }
+
+  return {
+    label: 'Último CRP',
+    text: getValueAfterLabel(lines, 'Último CRP:'),
+  };
+}
+
+export function parseCrp(
+  crpText: string,
+  sourceLabel: CadPrevExtrato['crp']['source_label'],
+): CadPrevExtrato['crp'] {
+  const match =
+    sourceLabel === 'CRP Vigente'
+      ? crpText.match(
+          /N[ºo]\s*([\d-]+),\s*emitido em\s*(\d{2}\/\d{2}\/\d{4}),\s*estar[aá]\s+vigente até\s*(\d{2}\/\d{2}\/\d{4})\.?/i,
+        )
+      : crpText.match(
+          /N[ºo]\s*([\d-]+),\s*emitido em\s*(\d{2}\/\d{2}\/\d{4})\.\s*Esteve\s+vigente até\s*(\d{2}\/\d{2}\/\d{4})\.?/i,
+        );
+  const isCurrent = sourceLabel === 'CRP Vigente';
 
   return {
     numero: match?.[1] ?? '',
     emitido_em: match?.[2] ?? '',
     vigente_ate: match?.[3] ?? '',
     data_pesquisa: '',
+    is_current: isCurrent,
+    lifecycle_status: isCurrent ? 'current' : 'expired',
+    source_label: sourceLabel,
   };
 }
 

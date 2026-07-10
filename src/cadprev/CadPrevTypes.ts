@@ -3,6 +3,9 @@ export interface CadPrevCrp {
   emitido_em: string;
   vigente_ate: string;
   data_pesquisa: string;
+  is_current: boolean;
+  lifecycle_status: 'current' | 'expired';
+  source_label: 'CRP Vigente' | 'Último CRP';
 }
 
 export interface CadPrevCriterio {
@@ -52,7 +55,7 @@ export interface CadPrevCrpResponse extends CadPrevExtrato {
 export interface CadPrevErrorResponse {
   status: 'error';
   source: 'CadPrev Público';
-  code: 'CADPREV_TIMEOUT' | 'CADPREV_UNAVAILABLE';
+  code: 'CADPREV_TIMEOUT' | 'CADPREV_UNAVAILABLE' | 'CADPREV_UNEXPECTED_CONTENT';
   message: string;
   details: string;
   error_origin?: 'browser_runtime' | 'connector_network' | 'official_source';

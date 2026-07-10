@@ -136,6 +136,8 @@ cadPrevRouter.get('/api/v1/cadprev/crp', async (req, res, next) => {
         message: 'O CadPrev Público respondeu com conteúdo insuficiente ou inesperado.',
         origin: 'official_source',
       });
+      res.status(502).json(createCadPrevUnexpectedContentResponse(observedError));
+      return;
     }
 
     if (observedError instanceof CadPrevEnteSearchAmbiguityError) {
@@ -252,6 +254,18 @@ export function createCadPrevUnavailableResponse(
     details: error instanceof Error ? error.message : String(error),
     error_origin: resolveUnavailableErrorOrigin(error),
     possible_source_limitation: retryMetadata?.possible_source_limitation,
+    consultado_em: new Date().toISOString(),
+  };
+}
+
+export function createCadPrevUnexpectedContentResponse(error: unknown): CadPrevErrorResponse {
+  return {
+    status: 'error',
+    source: 'CadPrev Público',
+    code: 'CADPREV_UNEXPECTED_CONTENT',
+    message: 'O CadPrev Público respondeu com conteúdo insuficiente ou inesperado.',
+    details: error instanceof Error ? error.message : String(error),
+    error_origin: 'official_source',
     consultado_em: new Date().toISOString(),
   };
 }
