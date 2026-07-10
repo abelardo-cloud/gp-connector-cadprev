@@ -52,8 +52,9 @@ export interface CadPrevCrpResponse extends CadPrevExtrato {
 export interface CadPrevErrorResponse {
   status: 'error';
   source: 'CadPrev Público';
-  code: 'CADPREV_TIMEOUT';
+  code: 'CADPREV_TIMEOUT' | 'CADPREV_UNAVAILABLE';
   message: string;
   details: string;
+  error_origin?: 'browser_runtime' | 'connector_network' | 'official_source';
   consultado_em: string;
 }
